@@ -1,22 +1,49 @@
- 1 name: Build TWRP for EKVATOR                                                 
- 2                                                                              
- 3 on:                                                                          
- 4   workflow_dispatch:                                                         
- 5                                                                              
- 6 jobs:                                                                        
- 7   build:                                                                     
- 8     runs-on: ubuntu-22.04                                                    
- 9     steps:                                                                   
-10       - name: Checkout Device Tree                                           
-11         uses: actions/checkout@v3                                            
-12                                                                              
-13       - name: Set up Build Environment                                       
-14         run: |                                                               
-15           sudo apt-get update                                                
-16           sudo apt-get install -y bc bison build-essential ccache curl flex g
-17           git config --global user.name "Builder"                            
-18           git config --global user.email "builder@action.com"                
-19                                                                              
-20       - name: Install Repo Tool                                              
-21         run: |                                                               
-22           sudo curl --create-dirs -L -o /usr/local/bin/repo https://storage.g
+name: Build TWRP for EKVATOR
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Device Tree
+        uses: actions/checkout@v3
+
+      - name: Set up Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zlib1g-dev python3
+          git config --global user.name "Builder"
+          git config --global user.email "builder@action.com"
+
+      - name: Install Repo Tool
+        run: |
+          sudo curl --create-dirs -L -o /usr/local/bin/repo https://storage.googleapis.com/git-repo-downloads/repo
+          sudo chmod a+rx /usr/local/bin/repo
+
+      - name: Initialize OmniROM Manifest
+        run: |
+          mkdir workspace && cd workspace
+          repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-11
+          
+      - name: Sync Dependencies & Inject Device Tree
+        run: |
+          cd workspace
+          repo sync --no-clone-bundle --current-branch --force-sync -j4
+          mkdir -p device/vestel
+          cp -r ../ device/vestel/EKVATOR/
+          
+      - name: Start Compilation
+        run: |
+          cd workspace
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch omni_EKVATOR-eng
+          mka recoveryimage
+
+      - name: Upload Recovery Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: twrp-EKVATOR
+          path: workspace/out/target/product/EKVATOR/recovery.img
