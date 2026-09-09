@@ -1,0 +1,63 @@
+name: FordEscort
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Device Tree
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIR"
+          df -h
+
+      - name: Set up Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zlib1g-dev python3 python3-pip repo
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@://github.com"
+          git config --global http.postBuffer 524288000
+          git config --global http.maxRequestBuffer 104857600
+          git config --global core.compression 0
+
+      - name: Initialize TWRP Manifest
+        run: |
+          mkdir workspace && cd workspace
+          repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp -b twrp-11
+
+      - name: Sync Dependencies & Inject Device Tree
+        run: |
+          cd workspace
+          repo sync --no-clone-bundle --current-branch --force-sync --fail-fast -j1
+          
+          # HATA BURADAYDI: workspace klasörünün kendisini kopyalamamak için 
+          # sadece repodan gelen dosyaları (BoardConfig, recovery.fstab vb.) cımbızla çekiyoruz
+          mkdir -p device/vestel/EKVATOR
+          find $GITHUB_WORKSPACE -maxdepth 1 -not -name "workspace" -not -name ".git" -not -name ".github" -exec cp -r {} device/vestel/EKVATOR/ \;
+
+      - name: Start Compilation
+        run: |
+          cd workspace
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch omni_EKVATOR-eng
+          mka recoveryimage
+
+      - name: Generate Dynamic Build Name
+        run: |
+          echo "BUILD_DATE=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+
+      - name: Upload TWRP Recovery Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: boklu-dans-${{ env.BUILD_DATE }}
+          path: workspace/out/target/product/EKVATOR/recovery.img
