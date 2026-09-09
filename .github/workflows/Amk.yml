@@ -1,0 +1,48 @@
+name: Build TWRP for EKVATOR
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Device Tree
+        uses: actions/checkout@v4 # En güncel checkout motoru
+
+      - name: Set up Build Environment
+        run: |
+          sudo apt-get update
+          # DNS hatasını engellemek için repo-tool aracını doğrudan resmi ubuntu paket deposundan (apt) çekiyoruz
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zlib1g-dev python3 python3-pip repo
+          git config --global user.name "Builder"
+          git config --global user.email "builder@action.com"
+
+      - name: Initialize OmniROM Manifest
+        run: |
+          mkdir workspace && cd workspace
+          # Android 11 tabanlı EKVATOR cihaz ağacı için en kararlı minimal manifest branch'i
+          repo init -u https://github.com -b twrp-11
+          
+      - name: Sync Dependencies & Inject Device Tree
+        run: |
+          cd workspace
+          repo sync --no-clone-bundle --current-branch --force-sync -j4
+          mkdir -p device/vestel/EKVATOR
+          # Sonsuz döngü (infinite loop) bug'ını engellemek için sadece workspace dışındaki kaynakları kopyalıyoruz
+          cp -r $GITHUB_WORKSPACE/* device/vestel/EKVATOR/
+          
+      - name: Start Compilation
+        run: |
+          cd workspace
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch omni_EKVATOR-eng
+          mka recoveryimage
+
+      - name: Upload TWRP Recovery Image
+        uses: actions/upload-artifact@v4 # GitHub'ın 2025 zorunlu kıldığı en güncel v4 yükleyicisi
+        with:
+          name: twrp-EKVATOR-image
+          path: workspace/out/target/product/EKVATOR/recovery.img
+
