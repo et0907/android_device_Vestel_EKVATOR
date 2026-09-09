@@ -1,4 +1,4 @@
-name: Build TWRP for EKVATOR
+name: Build TWRP for SEXVATOR
 
 on:
   workflow_dispatch:
@@ -8,29 +8,24 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout Device Tree
-        uses: actions/checkout@v4 # En güncel checkout motoru
+        uses: actions/checkout@v4
 
       - name: Set up Build Environment
         run: |
           sudo apt-get update
-          # DNS hatasını engellemek için repo-tool aracını doğrudan resmi ubuntu paket deposundan (apt) çekiyoruz
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zlib1g-dev python3 python3-pip repo
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zlib1g-dev python3 python3-pip
           git config --global user.name "Builder"
           git config --global user.email "builder@action.com"
 
-      - name: Initialize OmniROM Manifest
+      - name: Download Minimal TWRP Source (Fixing Code 128)
         run: |
-          mkdir workspace && cd workspace
-          # Android 11 tabanlı EKVATOR cihaz ağacı için en kararlı minimal manifest branch'i
-          repo init -u https://github.com -b twrp-11
+          # Linki çift tırnağa alarak bulutun adresi bölmesini engelledik ve hedef dizini açıkça belirttik
+          git clone --depth=1 "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git" -b twrp-11 ./workspace
           
-      - name: Sync Dependencies & Inject Device Tree
+      - name: Inject Device Tree
         run: |
-          cd workspace
-          repo sync --no-clone-bundle --current-branch --force-sync -j4
-          mkdir -p device/vestel/EKVATOR
-          # Sonsuz döngü (infinite loop) bug'ını engellemek için sadece workspace dışındaki kaynakları kopyalıyoruz
-          cp -r $GITHUB_WORKSPACE/* device/vestel/EKVATOR/
+          mkdir -p workspace/device/vestel/EKVATOR
+          cp -r $GITHUB_WORKSPACE/* workspace/device/vestel/EKVATOR/
           
       - name: Start Compilation
         run: |
@@ -41,8 +36,9 @@ jobs:
           mka recoveryimage
 
       - name: Upload TWRP Recovery Image
-        uses: actions/upload-artifact@v4 # GitHub'ın 2025 zorunlu kıldığı en güncel v4 yükleyicisi
+        uses: actions/upload-artifact@v4
         with:
           name: twrp-EKVATOR-image
           path: workspace/out/target/product/EKVATOR/recovery.img
+
 
