@@ -1,0 +1,43 @@
+name: Build TWRP for EKVATOR
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Device Tree
+        uses: actions/checkout@v4
+
+      - name: Set up Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zlib1g-dev python3 python3-pip
+          git config --global user.name "Builder"
+          git config --global user.email "builder@action.com"
+
+      - name: Download Minimal TWRP Source (No Repo Tool, No Code 6)
+        run: |
+          # repo init/sync dertleri bitti. GitHub'ın en kararlı yerel protokolüyle minimal 11 branch'ini çekiyoruz
+          git clone --depth=1 https://github.com -b twrp-11 workspace
+          
+      - name: Inject Device Tree
+        run: |
+          mkdir -p workspace/device/vestel/EKVATOR
+          cp -r $GITHUB_WORKSPACE/* workspace/device/vestel/EKVATOR/
+          
+      - name: Start Compilation
+        run: |
+          cd workspace
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch omni_EKVATOR-eng
+          mka recoveryimage
+
+      - name: Upload TWRP Recovery Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-EKVATOR-image
+          path: workspace/out/target/product/EKVATOR/recovery.img
+
